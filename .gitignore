@@ -1,0 +1,124 @@
+# ── Environment & Secrets ──────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.p12
+secrets/
+
+# ── Python ─────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+pip-wheel-metadata/
+.installed.cfg
+
+# ── Virtual Environments ───────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.virtualenv/
+
+# ── Testing & Coverage ─────────────────────────────────────────
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+nosetests.xml
+test-results/
+
+# ── Type Checking ──────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyright/
+
+# ── Linting ────────────────────────────────────────────────────
+.ruff_cache/
+
+# ── IDEs ───────────────────────────────────────────────────────
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Docker ─────────────────────────────────────────────────────
+docker-compose.override.yml
+# Keep docker-compose.yml but never commit override with dev ports
+
+# ── Database ───────────────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+# Never commit Alembic auto-generated heads without review
+# alembic/versions/ is intentionally tracked
+
+# ── Logs ───────────────────────────────────────────────────────
+*.log
+logs/
+*.log.*
+
+# ── ML Models & Embeddings ─────────────────────────────────────
+# Local model weights — large binary files, never commit
+models/
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.onnx
+*.gguf
+# BGE-M3 / BGE-Reranker local cache
+.cache/huggingface/
+.cache/torch/
+huggingface/
+
+# ── Vector Store & Search Data ────────────────────────────────
+# Local Qdrant / Elasticsearch data volumes (managed by Docker)
+qdrant_storage/
+elasticsearch_data/
+postgres_data/
+
+# ── Uploaded Documents ─────────────────────────────────────────
+# User-uploaded files must never be committed — highly sensitive
+uploads/
+tmp/
+temp/
+*.pdf
+*.docx
+*.eml
+*.msg
+
+# ── Build Artifacts ────────────────────────────────────────────
+*.pyc
+*.pyo
+.build/
+__pypackages__/
+
+# ── Notebooks (exploratory only — never production logic) ──────
+*.ipynb
+.ipynb_checkpoints/
+
+# ── OS ─────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+desktop.ini

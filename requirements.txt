@@ -1,0 +1,70 @@
+# ── API Framework ──────────────────────────────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12         # File upload support
+
+# ── Pydantic & Settings ────────────────────────────────────────
+pydantic==2.9.2
+pydantic-settings==2.6.1
+
+# ── Auth ───────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0  # JWT
+passlib[bcrypt]==1.7.4            # bcrypt password hashing
+
+# ── Database ───────────────────────────────────────────────────
+sqlalchemy==2.0.36                # Async ORM
+asyncpg==0.30.0                   # Async Postgres driver
+alembic==1.14.0                   # Migrations
+pgvector==0.3.5                   # Phase 2 — add now, schema ready from day 1
+
+# ── Redis ──────────────────────────────────────────────────────
+redis[hiredis]==5.2.0             # Async Redis client
+
+# ── Vector Store ───────────────────────────────────────────────
+qdrant-client==1.12.1             # Qdrant async client
+
+# ── Search ─────────────────────────────────────────────────────
+elasticsearch[async]==8.16.0      # Elasticsearch async client
+
+# ── Embedding ──────────────────────────────────────────────────
+# Option A: Local BGE-M3 (no external dependency, higher RAM)
+FlagEmbedding==1.3.3
+# Option B: Jina AI API (uncomment if you prefer managed)
+# jina==3.27.3
+
+# ── Reranking ──────────────────────────────────────────────────
+cohere==5.11.3                    # Cohere Rerank v3 API
+# Local fallback (uncomment to use BGE-Reranker-Large instead):
+# sentence-transformers==3.3.1
+
+# ── LLM ────────────────────────────────────────────────────────
+anthropic==0.40.0                 # claude-sonnet-4-20250514
+
+# ── Document Parsing ───────────────────────────────────────────
+pdfplumber==0.11.4                # PDF table + text extraction
+pypdf==5.1.0                      # PDF text fallback
+python-docx==1.1.2                # DOCX parsing
+mailparser==4.0.3                 # .eml / .msg parsing
+
+# ── Chunking ───────────────────────────────────────────────────
+tiktoken==0.8.0                   # Token-accurate chunking (matches LLM tokenizer)
+
+# ── HTTP Client (outbound calls) ───────────────────────────────
+httpx==0.28.0                     # Async HTTP (Cohere, Jina API calls)
+
+# ── Validation ─────────────────────────────────────────────────
+email-validator==2.2.0            # Email field validation
+
+# ── Logging ────────────────────────────────────────────────────
+structlog==24.4.0                 # Structured JSON logging with PII redaction hooks
+
+# ── File type validation ───────────────────────────────────────
+python-magic==0.4.27              # Magic number validation (NOT extension-based)
+
+# ── Dev / Testing ──────────────────────────────────────────────
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.0                     # Async test client (already listed above)
+pytest-cov==6.0.0
+ruff==0.8.2                       # Linter + formatter
+mypy==1.13.0
