@@ -1,9 +1,29 @@
-version: "3.9"
 # Removed 'version: "3.9"' from the top to fix warnings
 
 services:
+  # api:
+  #   build: .
+  #   ports:
+  #     - "8000:8000"
+  #   env_file: .env
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     qdrant:
+  #       condition: service_started
+  #     elasticsearch:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
   api:
     build: .
+    # ADDED: Explicitly run uvicorn
+    # Make sure 'main:app' matches the path to your FastAPI instance
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - .:/code
     ports:
       - "8000:8000"
     env_file: .env

@@ -1,11 +1,30 @@
+# from fastapi import APIRouter
+
+# from app.api.v1 import auth, documents, query, sessions, audit
+
+# v1_router = APIRouter()
+
+# v1_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
+# v1_router.include_router(documents.router, prefix="/documents", tags=["Documents"])
+# v1_router.include_router(query.router, prefix="/query", tags=["Query"])
+# v1_router.include_router(sessions.router, prefix="/sessions", tags=["Sessions"])
+# v1_router.include_router(audit.router, prefix="/audit", tags=["Audit"])
+"""
+app/api/v1/router.py
+
+Aggregates all v1 route modules into a single router.
+main.py mounts this at /v1.
+"""
+
 from fastapi import APIRouter
 
-from app.api.v1 import auth, documents, query, sessions, audit
+from app.api.v1 import auth, users, documents, query, sessions, audit
 
 v1_router = APIRouter()
 
-v1_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
+v1_router.include_router(auth.router,      prefix="/auth",      tags=["Auth"])
+v1_router.include_router(users.router,     prefix="/users",     tags=["Users"])
 v1_router.include_router(documents.router, prefix="/documents", tags=["Documents"])
-v1_router.include_router(query.router, prefix="/query", tags=["Query"])
-v1_router.include_router(sessions.router, prefix="/sessions", tags=["Sessions"])
-v1_router.include_router(audit.router, prefix="/audit", tags=["Audit"])
+v1_router.include_router(query.router,     prefix="",           tags=["Query"])
+v1_router.include_router(sessions.router,  prefix="/sessions",  tags=["Sessions"])
+v1_router.include_router(audit.router,     prefix="/audit",     tags=["Audit"])

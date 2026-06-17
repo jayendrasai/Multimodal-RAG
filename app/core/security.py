@@ -12,7 +12,7 @@ Token design:
 
 from datetime import datetime, timedelta, timezone
 from typing import Any
-
+import uuid
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
@@ -64,6 +64,7 @@ def create_refresh_token(user_id: str) -> str:
     payload: dict[str, Any] = {
         "sub": user_id,
         "type": "refresh",
+        "jti": str(uuid.uuid4()),
         "iat": now,
         "exp": now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
     }
