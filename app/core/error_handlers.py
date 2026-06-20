@@ -23,6 +23,8 @@ from app.core.exceptions import (
     RateLimitExceededError,
     UnauthorizedError,
     ValidationError,
+    FileTooLargeError,
+    UnsupportedFileTypeError
 )
 
 logger = structlog.get_logger(__name__)
@@ -30,6 +32,8 @@ logger = structlog.get_logger(__name__)
 # Map custom exception types to HTTP status codes
 _STATUS_MAP: dict[type[AppError], int] = {
     ValidationError: 400,
+    FileTooLargeError: 400,
+    UnsupportedFileTypeError: 400,
     InvalidTokenError: 401,
     UnauthorizedError: 401,
     ForbiddenError: 403,

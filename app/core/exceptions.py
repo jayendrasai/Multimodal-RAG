@@ -102,3 +102,7 @@ class GenerationError(InternalError):
     """Raised when LLM generation fails after retries."""
     def __init__(self) -> None:
         super().__init__("Answer generation failed. Please retry.")
+
+class ParserError(InternalError):
+    def __init__(self, message: str = "Document could not be parsed. The file may be corrupted or password-protected.") -> None:
+        super().__init__(message)

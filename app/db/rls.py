@@ -49,7 +49,7 @@ async def set_rls_user_id(db: AsyncSession, user_id: uuid.UUID) -> None:
     user_id_str = str(uuid.UUID(str(user_id)))  # raises ValueError if malformed
 
     await db.execute(
-        text("SET LOCAL app.current_user_id = :user_id"),
+        text("SELECT set_config('app.current_user_id', :user_id, true)"),
         {"user_id": user_id_str},
     )
 
