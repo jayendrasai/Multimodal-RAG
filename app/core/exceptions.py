@@ -106,3 +106,8 @@ class GenerationError(InternalError):
 class ParserError(InternalError):
     def __init__(self, message: str = "Document could not be parsed. The file may be corrupted or password-protected.") -> None:
         super().__init__(message)
+
+class RerankerError(InternalError):
+    """Raised when the cross-encoder reranking fails or is misconfigured."""
+    def __init__(self, message: str = "Document reranking failed. Please retry.") -> None:
+        super().__init__(message)

@@ -47,6 +47,9 @@ WORKDIR /code
 # Copy application source
 COPY --chown=appuser:appgroup . .
 
+RUN mkdir -p /home/appuser/.cache/huggingface \
+    && chown -R appuser:appgroup /home/appuser/.cache
+
 USER appuser
 
 EXPOSE 8000
