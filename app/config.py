@@ -96,14 +96,20 @@ class Settings(BaseSettings):
     ELASTIC_USER: str = "elastic"
 
     # ── LLM ────────────────────────────────────────────────────────────────
-    ANTHROPIC_API_KEY: str = Field(...)
-    LLM_MODEL: str = "claude-sonnet-4-20250514"
+    # ANTHROPIC_API_KEY: str = Field(...)
+    # LLM_MODEL: str = "claude-sonnet-4-20250514"
+    # LLM_MAX_TOKENS: int = 2048
+    # LLM_TEMPERATURE: float = 0.1    # Low temp for factual RAG answers
+
+    OPENROUTER_API_KEY: str = Field(...)
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    LLM_MODEL: str = "google/gemma-4-31b-it:free"
     LLM_MAX_TOKENS: int = 2048
     LLM_TEMPERATURE: float = 0.1    # Low temp for factual RAG answers
 
     # ── Reranker ───────────────────────────────────────────────────────────
     COHERE_API_KEY: str | None = None
-    USE_LOCAL_RERANKER: bool = False            # True = BGE-Reranker-Large local
+    USE_LOCAL_RERANKER: bool = True            # True = BGE-Reranker-Large local
     RERANKER_TOP_K: int = 10                    # Top-100 recall → Top-10 precision
     RERANKER_RECALL_K: int = 100
 
