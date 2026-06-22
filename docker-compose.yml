@@ -27,7 +27,6 @@ services:
       - hf_cache:/home/appuser/.cache/huggingface
     environment:
       HF_HOME: /home/appuser/.cache/huggingface
-      TRANSFORMERS_CACHE: /home/appuser/.cache/huggingface
     ports:
       - "8000:8000"
     env_file: .env
