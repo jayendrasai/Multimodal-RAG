@@ -16,7 +16,8 @@ of context is worse than one fewer complete chunk.
 """
 
 import structlog
-from anthropic import AsyncAnthropic
+#from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from app.config import get_settings
 from app.core.exceptions import GenerationError
@@ -25,13 +26,18 @@ from app.ingestion.chunker import count_tokens
 logger = structlog.get_logger(__name__)
 settings = get_settings()
 
-_client: AsyncAnthropic | None = None
+#_client: AsyncAnthropic | None = None
+_client: AsyncOpenAI | None = None
 
 
-def _get_client() -> AsyncAnthropic:
+def _get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
-        _client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        _client = AsyncOpenAI(
+            api_key=settings.OPENROUTER_API_KEY,
+            base_url=settings.OPENROUTER_BASE_URL
+        )
+        #_client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
     return _client
 
 
@@ -109,14 +115,24 @@ async def generate_answer(
 
     try:
         client = _get_client()
-        response = await client.messages.create(
+        # response = await client.messages.create(
+        #     model=settings.LLM_MODEL,
+        #     max_tokens=settings.LLM_MAX_TOKENS,
+        #     temperature=settings.LLM_TEMPERATURE,
+        #     system=system_prompt,
+        #     messages=[{"role": "user", "content": user_message}],
+        # )
+        #answer = response.content[0].text
+        response = await client.chat.completions.create(
             model=settings.LLM_MODEL,
             max_tokens=settings.LLM_MAX_TOKENS,
             temperature=settings.LLM_TEMPERATURE,
-            system=system_prompt,
-            messages=[{"role": "user", "content": user_message}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
         )
-        answer = response.content[0].text
+        answer = response.choices[0].message.content
 
         logger.info(
             "generation_complete",
