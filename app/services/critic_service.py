@@ -115,7 +115,7 @@ async def check_groundedness(
         # )
         # raw_text = response.content[0].text
         response = await client.chat.completions.create(
-            model=settings.LLM_MODEL,
+            model=settings.CRITIC_LLM_MODEL,
             max_tokens=1024,
             temperature=0,  # deterministic — this is a check, not a creative task
             messages=[
