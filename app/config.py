@@ -104,6 +104,7 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = Field(...)
     OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
     LLM_MODEL: str = "google/gemma-4-31b-it:free"
+    CRITIC_LLM_MODEL: str = "openai/gpt-oss-120b:free"
     LLM_MAX_TOKENS: int = 2048
     LLM_TEMPERATURE: float = 0.1    # Low temp for factual RAG answers
 
