@@ -15,6 +15,7 @@ from typing import Annotated
 
 import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends , HTTPException, status
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db_with_rls, get_redis
@@ -28,6 +29,7 @@ from app.schemas.session import (
 )
 from app.services.session_service import SessionService
 from app.core.exceptions import ConflictError, NotFoundError
+from app.tasks.summarization import summarize_session
 
 router = APIRouter()
 
@@ -109,25 +111,51 @@ async def end_session(
     redis: aioredis.Redis = Depends(get_redis),
 ) -> EndSessionResponse:
     """
-    Marks the session ended and clears its Redis working-memory cache.
-
-    Returns 409 if the session has already ended — ending is not
-    idempotent in Phase 1 (calling it twice is treated as a client error,
-    surfacing a bug rather than silently succeeding).
-
-    Phase 1: summary_id is always null, topics/entities/unresolved are
-    always empty. Phase 2 adds LLM summarization here.
+    Ownership + atomic transition in one query. A non-owner's request matches 
+    zero rows, identical response shape to "already ended".
+    
+    Idempotent: returns 202 whether it was just closed or already closed.
     """
-    service = SessionService(db=db, redis=redis)
-    #await service.end_session(user_id=current_user.id, session_id=session_id)
+    # 1. Attempt atomic update
+    result = await db.execute(
+        text("""
+            UPDATE sessions
+            SET status = 'summarization_pending', updated_at = now()
+            WHERE id = :session_id AND user_id = :user_id AND status = 'active'
+            RETURNING id
+        """),
+        {"session_id": str(session_id), "user_id": str(current_user.id)}
+    )
+    row = result.fetchone()
 
-    try:
-        await service.end_session(user_id=current_user.id, session_id=session_id)
-    except ConflictError as e:
-        # Translate the internal domain error into an HTTP 409 response
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    # 2. Handle cases where the update missed (already ended, missing, or unauthorized)
+    if row is None:
+        existing = await db.execute(
+            text("SELECT status FROM sessions WHERE id = :session_id AND user_id = :user_id"),
+            {"session_id": str(session_id), "user_id": str(current_user.id)}
+        )
+        existing_row = existing.fetchone()
+        
+        if existing_row is None:
+            # Either it doesn't exist, or it belongs to someone else
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="session not found"
+            )
+            
+        # Already pending or summarized — do NOT re-enqueue.
+        return {"session_id": str(session_id), "status": existing_row[0]}
 
+    # Commit the transaction so the worker sees the updated status
+    await db.commit()
+
+    # 3. Enqueue the background task
+    summarize_session.delay(str(session_id))
+    
+    #return {"session_id": str(session_id), "status": "summarization_pending"}
     return EndSessionResponse(
+        session_id=session_id,
+        status="summarization_pending",
         summary_id=None,
         topics_extracted=[],
         entities_extracted=0,
