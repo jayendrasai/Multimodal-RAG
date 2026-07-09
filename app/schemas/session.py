@@ -51,11 +51,20 @@ class SessionHistoryResponse(BaseModel):
     turn_count: int
 
 
+# class EndSessionResponse(BaseModel):
+#     summary_id: uuid.UUID | None
+#     # Phase 1: summarization is not implemented yet (Phase 2 feature).
+#     # These fields are always empty/zero now but present in the contract
+#     # so Phase 2 doesn't require a breaking API change.
+#     topics_extracted: list[str] = Field(default_factory=list)
+#     entities_extracted: int = 0
+#     memory_stored: bool = False
+#     unresolved_questions: list[str] = Field(default_factory=list)
+
 class EndSessionResponse(BaseModel):
-    summary_id: uuid.UUID | None
-    # Phase 1: summarization is not implemented yet (Phase 2 feature).
-    # These fields are always empty/zero now but present in the contract
-    # so Phase 2 doesn't require a breaking API change.
+    session_id: uuid.UUID
+    status: str
+    summary_id: uuid.UUID | None = None
     topics_extracted: list[str] = Field(default_factory=list)
     entities_extracted: int = 0
     memory_stored: bool = False
