@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+
 
 # ── Stage 1: dependency builder ───────────────────────────────────────────────
 FROM python:3.11-slim AS builder
