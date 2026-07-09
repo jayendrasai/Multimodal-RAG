@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     REDIS_SESSION_TTL_SECONDS: int = 3600       # 1 hour working memory TTL
     REDIS_QUERY_CACHE_TTL_SECONDS: int = 3600   # 1 hour query result cache
 
+    # ── Celery ─────────────────────────────────────────────────────────────
+    CELERY_BROKER_URL: RedisDsn = Field(...)
+    CELERY_RESULT_BACKEND: RedisDsn = Field(...)
+
     # ── Rate Limiting ──────────────────────────────────────────────────────
     RATE_LIMIT_REQUESTS_PER_MINUTE: int = 60
     RATE_LIMIT_AUTH_PER_MINUTE: int = 10        # Stricter for auth endpoints
