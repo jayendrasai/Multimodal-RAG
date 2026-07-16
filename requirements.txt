@@ -18,6 +18,7 @@ bcrypt==3.2.2
 # ── Database ───────────────────────────────────────────────────
 sqlalchemy==2.0.36                # Async ORM
 asyncpg==0.30.0                   # Async Postgres driver
+psycopg2-binary==2.9.9            # NEW — Sync Postgres driver for Celery
 alembic==1.14.0                   # Migrations
 pgvector==0.3.5                   # Phase 2 — add now, schema ready from day 1
 
