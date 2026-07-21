@@ -11,7 +11,7 @@ import uuid
 import structlog
 
 from app.core.exceptions import RetrievalError
-from app.vector_store.qdrant_client import collection_name_for_user, get_qdrant_client
+from app.vector_store.qdrant_client import collection_name_for_user, get_sync_qdrant_client
 
 logger = structlog.get_logger(__name__)
 
@@ -30,7 +30,7 @@ async def dense_search(
     caller passed a malicious query_vector, it cannot retrieve another
     user's data because the search only ever touches one collection.
     """
-    client = get_qdrant_client()
+    client = get_sync_qdrant_client()
     collection = collection_name_for_user(user_id)
 
     try:
