@@ -14,25 +14,53 @@ import hashlib
 import uuid
 
 import structlog
-from qdrant_client import AsyncQdrantClient, models
+#from qdrant_client import AsyncQdrantClient, models
 
 from app.config import get_settings
 from app.core.exceptions import RetrievalError
+from qdrant_client import AsyncQdrantClient, QdrantClient, models
+
+from qdrant_client import AsyncQdrantClient, QdrantClient
+from app.config import get_settings
+
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
 
-_client: AsyncQdrantClient | None = None
+# _client: AsyncQdrantClient | None = None
+
+
+# def get_qdrant_client() -> AsyncQdrantClient:
+#     global _client
+#     if _client is None:
+#         _client = AsyncQdrantClient(
+#             url=str(settings.QDRANT_URL),
+#             api_key=settings.QDRANT_API_KEY,
+#         )
+#     return _client
+
+_async_client: AsyncQdrantClient | None = None
+_sync_client: QdrantClient | None = None
 
 
 def get_qdrant_client() -> AsyncQdrantClient:
-    global _client
-    if _client is None:
-        _client = AsyncQdrantClient(
-            url=str(settings.QDRANT_URL),
-            api_key=settings.QDRANT_API_KEY,
-        )
-    return _client
+    """UNCHANGED — used by the async FastAPI query path (/v1/query)."""
+    global _async_client
+    if _async_client is None:
+        settings = get_settings()
+        _async_client = AsyncQdrantClient(url=settings.QDRANT_URL)
+    return _async_client
+
+def get_sync_qdrant_client() -> QdrantClient:
+    """NEW — used exclusively by Celery tasks (sync worker process).
+    Do not use the async client here; it will hold connections bound
+    to an event loop that dies with each asyncio.run() call, same
+    failure mode as the Sprint 1 DB bridge issue."""
+    global _sync_client
+    if _sync_client is None:
+        settings = get_settings()
+        _sync_client = QdrantClient(url=str(settings.QDRANT_URL))
+    return _sync_client
 
 
 def collection_name_for_user(user_id: uuid.UUID | str) -> str:
@@ -51,7 +79,7 @@ async def ensure_collection_exists(user_id: uuid.UUID | str) -> str:
     Idempotent — creates the user's collection if it doesn't exist yet.
     Call this before the first ingestion for any user.
     """
-    client = get_qdrant_client()
+    client = get_sync_qdrant_client()
     collection = collection_name_for_user(user_id)
 
     try:
@@ -92,7 +120,7 @@ async def upsert_chunks(
     if len(chunk_ids) != len(embeddings) or len(chunk_ids) != len(chunk_texts):
         raise ValueError("chunk_ids, embeddings, and chunk_texts must be the same length")
 
-    client = get_qdrant_client()
+    client = get_sync_qdrant_client()
     collection = await ensure_collection_exists(user_id)
 
     points = []
@@ -122,12 +150,13 @@ async def upsert_chunks(
 
 
 async def delete_document_chunks(user_id: uuid.UUID | str, document_id: uuid.UUID | str) -> int:
+
     """
     Delete all chunks belonging to a document. Used by DELETE /documents/{id}.
     Filters on document_id within the user's own collection — cannot
     accidentally touch another user's data since collections are isolated.
     """
-    client = get_qdrant_client()
+    client = get_sync_qdrant_client()
     collection = collection_name_for_user(user_id)
 
     try:
@@ -152,3 +181,22 @@ async def delete_document_chunks(user_id: uuid.UUID | str, document_id: uuid.UUI
     except Exception as e:
         logger.error("qdrant_delete_failed", error=str(e))
         raise RetrievalError() from e
+
+
+
+def qdrant_upsert(collection_name: str, point_id: str, vector: list[float], payload: dict) -> None:
+    """
+    Synchronous upsert used exclusively by the Celery outbox relay worker.
+    """
+    client = get_sync_qdrant_client()
+    
+    point = models.PointStruct(
+        id=point_id, 
+        vector=vector, 
+        payload=payload
+    )
+    
+    client.upsert(
+        collection_name=collection_name, 
+        points=[point]
+    )
