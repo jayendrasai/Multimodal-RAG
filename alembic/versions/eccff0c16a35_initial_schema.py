@@ -75,6 +75,7 @@ def upgrade() -> None:
     sa.Column('mime_type', sa.String(length=100), nullable=False),
     sa.Column('size_bytes', sa.BigInteger(), nullable=False),
     sa.Column('chunk_count', sa.Integer(), nullable=False),
+    #sa.Column("document_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=True),
     sa.Column('status', sa.String(length=20), nullable=False),
     sa.Column('embedding_model', sa.String(length=100), nullable=False),
     sa.Column('doc_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
