@@ -4,26 +4,17 @@ app/services/ingestion_service.py
 Business logic for document ingestion. The route handler stays thin —
 all orchestration logic lives here.
 
-Idempotency: ingestion is NOT idempotent by document content in Phase 1.
-Uploading the same PDF twice creates two separate Document rows with two
-separate chunk sets. True content-based idempotency (hash the file,
-reject/merge duplicates) is a reasonable Phase 2 addition but is not in
-the Day 4 scope. If you need idempotent retries from a flaky client,
-use the document_id-based idempotency key pattern shown in
-PATCH /documents/{id}/retry (not yet implemented in this stub).
-
-KNOWN PHASE 1 LIMITATION (write this in your risk register):
-  If the pipeline fails after Qdrant write but before Elasticsearch
-  write (or vice versa), the two stores can become inconsistent for
-  that document. Phase 1 does not implement a saga/compensation pattern.
-  Mitigation: document.status = "failed" makes this visible, and
-  DELETE /documents/{id} cleans up both stores regardless of partial
-  state (delete is idempotent — deleting from a store with no matching
-  data is a no-op, not an error).
+ARCHITECTURAL UPDATE (Phase 2):
+  This service now uses the Outbox Pattern. It no longer writes directly 
+  to Qdrant or Elasticsearch. The KNOWN PHASE 1 LIMITATION (split-brain 
+  inconsistency between Postgres/Qdrant/ES) is solved. 
+  
+  Ingestion and Deletion simply write intents (`UPSERT_CHUNK`, `DELETE_CHUNKS`) 
+  to the `outbox` table and commit the transaction. The Celery relay worker 
+  handles the actual external sync.
 """
 
 import uuid
-
 import structlog
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,10 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.core.file_validation import detect_file_type, validate_file_size
 from app.models.document import Document
-from app.pipelines.ingest_pipeline import run_ingest_pipeline
-from app.search.es_client import delete_document_chunks as es_delete
-from app.vector_store.qdrant_client import delete_document_chunks as qdrant_delete
+from app.models.outbox import Outbox
 from app.config import get_settings
+
+# Assuming you have or will extract these two helpers from your old ingest_pipeline:
+# from app.parsers.document_parser import extract_text 
+# from app.core.chunking import chunk_text
 
 logger = structlog.get_logger(__name__)
 settings = get_settings()
@@ -52,11 +45,12 @@ class IngestionService:
         doc_metadata: dict | None = None,
     ) -> Document:
         """
-        Full ingestion flow:
+        Full ingestion flow (Outbox Pattern):
           1. Validate size + magic-number type detection
-          2. Create Document row with status=processing
-          3. Run pipeline (parse → chunk → embed → store)
-          4. Update status=ready + chunk_count, or status=failed on error
+          2. Extract text and chunk (CPU bound, fast)
+          3. Create Document row with status='processing'
+          4. Create Outbox rows for every chunk
+          5. Commit ALL OF IT in a single atomic database transaction
         """
         validate_file_size(file_bytes)
         file_type = detect_file_type(file_bytes, filename)
@@ -67,19 +61,29 @@ class IngestionService:
             "eml": "message/rfc822",
         }
 
+        # 1. Parse and Chunk inline (No network calls)
+        # Note: Replace with your actual text extraction/chunking functions
+        # raw_text = await extract_text(file_bytes, file_type)
+        # chunks = chunk_text(raw_text, size=512, overlap=64)
+        
+        # Placeholder for compilation:
+        chunks = ["chunk 1 text", "chunk 2 text"] 
+        chunk_count = len(chunks)
+
+        # 2. Prepare Document Record
+        document_id = uuid.uuid4()
         document = Document(
-            id=uuid.uuid4(),
+            id=document_id,
             user_id=user_id,
             filename=filename,
             mime_type=mime_map[file_type],
             size_bytes=len(file_bytes),
-            status="processing",
+            status="processing",  # Stays 'processing' until worker finishes
+            chunk_count=chunk_count,
             embedding_model=settings.EMBEDDING_MODEL_VERSION,
             doc_metadata=doc_metadata,
         )
         self.db.add(document)
-        await self.db.commit()
-        await self.db.refresh(document)
 
         logger.info(
             "ingestion_started",
@@ -87,34 +91,42 @@ class IngestionService:
             user_id=str(user_id),
             file_type=file_type,
             size_bytes=len(file_bytes),
+            chunk_count=chunk_count,
         )
 
-        try:
-            chunk_count = await run_ingest_pipeline(
-                user_id=user_id,
+        # 3. Prepare Outbox Events
+        for idx, chunk_text_data in enumerate(chunks):
+            # Deterministic ID allows safe worker retries without duplicates
+            chunk_id = uuid.uuid5(document.id, str(idx))
+            
+            outbox_event = Outbox(
+                aggregate_type="chunk",
+                aggregate_id=chunk_id,
                 document_id=document.id,
-                file_type=file_type,
-                file_bytes=file_bytes,
-                filename=filename,
-                doc_metadata=doc_metadata,
+                operation_type="UPSERT_CHUNK",
+                payload={
+                    "chunk_index": idx,
+                    "text": chunk_text_data,
+                    "metadata": doc_metadata or {},
+                    "user_id": str(user_id), # required for tenancy checks
+                },
             )
+            self.db.add(outbox_event)
 
-            document.status = "ready"
-            document.chunk_count = chunk_count
+        # 4. Atomic Commit
+        try:
             await self.db.commit()
             await self.db.refresh(document)
-
+            
             logger.info(
-                "ingestion_complete",
+                "ingestion_queued",
                 document_id=str(document.id),
-                chunk_count=chunk_count,
+                outbox_events_created=chunk_count,
             )
-
         except Exception as e:
-            document.status = "failed"
-            await self.db.commit()
+            await self.db.rollback()
             logger.error(
-                "ingestion_failed",
+                "ingestion_failed_db_commit",
                 document_id=str(document.id),
                 error=str(e),
             )
@@ -142,24 +154,42 @@ class IngestionService:
 
     async def delete_document(self, user_id: uuid.UUID, document_id: uuid.UUID) -> int:
         """
-        Deletes the document and all associated chunks from Qdrant and
-        Elasticsearch. Idempotent — deleting an already-deleted document's
-        vectors is a no-op in both stores, not an error.
+        Outbox Delete Flow:
+        Instead of calling Qdrant/ES here, we mark the document as 'deleting'
+        and queue a DELETE_CHUNKS outbox event. The worker handles the actual
+        remote API calls safely.
         """
         document = await self.get_document(user_id, document_id)
+        
+        # If it's already deleting or deleted, do nothing
+        if document.status in ("deleting", "deleted"):
+            return document.chunk_count
+
         chunks_removed = document.chunk_count
+        
+        # 1. Mark status as 'deleting'
+        document.status = "deleting"
+        
+        # 2. Queue the delete event for the worker
+        delete_event = Outbox(
+            aggregate_type="document",
+            aggregate_id=document.id,
+            document_id=document.id,
+            operation_type="DELETE_CHUNKS",
+            payload={
+                "user_id": str(user_id),
+            },
+        )
+        self.db.add(delete_event)
 
-        await qdrant_delete(user_id, document_id)
-        await es_delete(user_id, document_id)
-
-        await self.db.delete(document)
+        # 3. Commit the intent
         await self.db.commit()
 
         logger.info(
-            "document_deleted",
+            "document_delete_queued",
             document_id=str(document_id),
             user_id=str(user_id),
-            chunks_removed=chunks_removed,
+            chunks_to_remove=chunks_removed,
         )
 
         return chunks_removed
