@@ -16,21 +16,34 @@ from elasticsearch import AsyncElasticsearch, NotFoundError
 from app.config import get_settings
 from app.core.exceptions import RetrievalError
 
+from elasticsearch import AsyncElasticsearch, Elasticsearch
+from app.config import get_settings
+
+
 logger = structlog.get_logger(__name__)
 settings = get_settings()
 
-_client: AsyncElasticsearch | None = None
+#_client: AsyncElasticsearch | None = None
 
 
+_async_es: AsyncElasticsearch | None = None
+_sync_es: Elasticsearch | None = None
 def get_es_client() -> AsyncElasticsearch:
-    global _client
-    if _client is None:
-        _client = AsyncElasticsearch(
-            str(settings.ELASTIC_URL),
-            basic_auth=(settings.ELASTIC_USER, settings.ELASTIC_PASSWORD),
-        )
-    return _client
+    """UNCHANGED — async API request path."""
+    global _async_es
+    if _async_es is None:
+        settings = get_settings()
+        _async_es = AsyncElasticsearch(settings.ELASTIC_URL)
+    return _async_es
 
+
+def get_sync_es_client() -> Elasticsearch:
+    """NEW — for Celery tasks only."""
+    global _sync_es
+    if _sync_es is None:
+        settings = get_settings()
+        _sync_es = Elasticsearch(str(settings.ELASTIC_URL))
+    return _sync_es
 
 def index_name_for_user(user_id: uuid.UUID | str) -> str:
     digest = hashlib.sha256(str(user_id).encode()).hexdigest()[:32]

@@ -3,7 +3,7 @@ app/api/v1/documents.py
 
 POST   /v1/documents/ingest          — upload and process a document
 GET    /v1/documents                 — list all documents for the user
-DELETE /v1/documents/{document_id}   — delete document and its chunks
+DELETE /v1/documents/{document_id}   — queue document and its chunks for deletion
 
 Rate limiting: ingestion is CPU/embedding-cost heavy. Limited to 10/min
 per user — much stricter than the general 60/min API limit.
@@ -37,8 +37,8 @@ _ingest_limit = get_rate_limiter(limit=10, window=60)
 @router.post(
     "/ingest",
     response_model=DocumentResponse,
-    status_code=201,
-    summary="Upload and process a document",
+    status_code=202,  # CHANGED: 202 Accepted because processing happens asynchronously
+    summary="Upload and queue a document for processing",
 )
 async def ingest_document(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -48,12 +48,9 @@ async def ingest_document(
     _rate: None = Depends(_ingest_limit),
 ) -> DocumentResponse:
     """
-    Parses the uploaded file, chunks it (512 tokens / 64 overlap by
-    default), embeds with BGE-M3, and stores in the user's isolated
-    Qdrant collection and Elasticsearch index.
-
-    File type is determined by magic-number inspection of the actual
-    bytes, never by the filename or declared Content-Type header.
+    Parses the uploaded file, chunks it, and queues it in the Outbox.
+    The Celery relay worker handles the actual embedding and syncing to
+    Qdrant and Elasticsearch asynchronously.
     """
     doc_metadata = None
     if metadata:
@@ -67,6 +64,9 @@ async def ingest_document(
     file_bytes = await file.read()
 
     service = IngestionService(db=db)
+    
+    # This now commits to Postgres and returns immediately.
+    # The returned document will have status="PROCESSING"
     document = await service.ingest_document(
         user_id=current_user.id,
         filename=file.filename or "unnamed",
@@ -97,7 +97,8 @@ async def list_documents(
 @router.delete(
     "/{document_id}",
     response_model=DocumentDeleteResponse,
-    summary="Delete a document and all its vector chunks",
+    status_code=202,  # CHANGED: 202 Accepted, delete happens via Outbox worker
+    summary="Queue a document and all its vector chunks for deletion",
 )
 async def delete_document(
     document_id: uuid.UUID,
@@ -105,15 +106,17 @@ async def delete_document(
     db: AsyncSession = Depends(get_db_with_rls),
 ) -> DocumentDeleteResponse:
     """
-    Idempotent: calling this twice on the same document_id returns 404
-    on the second call (document already gone) rather than erroring —
-    DELETE is naturally idempotent when modeled this way.
+    Marks the document as DELETING and queues a DELETE_CHUNKS outbox event.
+    The worker handles the external teardown in Qdrant and ES.
     """
     service = IngestionService(db=db)
+    
+    # Handles 404s and queuing the Outbox event
     chunks_removed = await service.delete_document(
         user_id=current_user.id,
         document_id=document_id,
     )
+    
     return DocumentDeleteResponse(
         deleted=True,
         chunks_removed=chunks_removed,

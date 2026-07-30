@@ -7,7 +7,10 @@ celery_app = Celery(
     "rag_platform",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.tasks.summarization"],
+    include=[
+        "app.tasks.summarization",
+        "app.tasks.outbox_relay",  # NEW — worker must import this to execute it
+    ],
 )
 
 celery_app.conf.update(
@@ -20,3 +23,11 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1, # don't hoard tasks ahead of slow ones
     task_reject_on_worker_lost=True,
 )
+
+# NEW — Register the periodic schedule
+celery_app.conf.beat_schedule = {
+    "relay-outbox-every-2-seconds": {
+        "task": "app.tasks.outbox_relay.relay_outbox_batch",
+        "schedule": 2.0,
+    },
+}
