@@ -83,6 +83,31 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 4G # Hard limit to prevent host system lockup during local dev OOMs
+        reservations:
+          memory: 2G # Soft guarantee for worker processes
+    restart: unless-stopped
+
+  # ── ADDED: Celery Beat (Outbox Relay Scheduler) ────────────────────────
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # ADDED: -s /tmp/celerybeat-schedule
+    command: celery -A app.core.celery_app beat --loglevel=info -s /tmp/celerybeat-schedule
+    volumes:
+      - .:/code
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   qdrant:
